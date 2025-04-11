@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D点云配准可视化系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --hover-color: #45a049;
+            --bg-color: #f5f7fa;
+            --border-color: #dfe3e8;
+            --text-dark: #2c3e50;
+            --error-color: #ef5350;
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-dark);
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 2.2em;
+            margin: 0;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .header h1::before {
+            content: "🌐";
+            font-size: 1.2em;
+        }
+
+        #container {
+            width: 95%;
+            height: 60vh;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+            background: #fff;
+            margin: 20px auto 0;
+        }
+
+        #controls {
+            padding: 18px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 文件上传组样式 */
+        .upload-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1 1 auto;
+        }
+
+        .custom-upload {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 280px;
+        }
+
+        .custom-upload input[type="file"] {
+            opacity: 0;
+            position: absolute;
+            width: 1px;
+            height: 1px;
+        }
+
+        .custom-upload label {
+            padding: 12px 28px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 3px 6px rgba(76, 175, 80, 0.15);
+            font-size: 15px;
+        }
+
+        .custom-upload label:hover {
+            background: var(--hover-color);
+            transform: translateY(-1px);
+            box-shadow: 0 5px 8px rgba(76, 175, 80, 0.25);
+        }
+
+        .file-name {
+            color: #607d8b;
+            font-size: 14px;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* 操作按钮样式 */
+        .custom-button {
+            padding: 12px 32px;
+            background: linear-gradient(135deg, var(--primary-color), #43a047);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            box-shadow: 0 3px 6px rgba(76, 175, 80, 0.15);
+        }
+
+        .custom-button:disabled {
+            background: #cfd8dc;
+            cursor: not-allowed;
+        }
+
+        /* 信息面板居中样式 */
+        .info-panel {
+            display: grid;
+            grid-template-columns: minmax(320px, 800px);
+            justify-content: center;
+            gap: 24px;
+            margin: 24px auto 0;
+            padding: 0 20px;
+        }
+
+        .info-card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .matrix-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            line-height: 1.5;
+            margin: 0 auto;
+            width: fit-content;
+        }
+
+        /* 指标组样式 */
+        .metric-group {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 25px;
+        }
+
+        .metric-item {
+            text-align: center;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+
+        .metric-item:hover {
+            transform: translateY(-2px);
+        }
+
+        .metric-value {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 8px 0;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: #78909c;
+        }
+
+        /* 响应式布局 */
+        @media (max-width: 768px) {
+            #controls {
+                flex-direction: column;
+                padding: 15px;
+            }
+
+            .upload-group {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .custom-upload {
+                width: 100%;
+                min-width: auto;
+            }
+
+            .file-name {
+                max-width: 200px;
+            }
+
+            .info-card {
+                padding: 16px;
+            }
+
+            .metric-group {
+                grid-template-columns: 1fr;
+            }
+
+            #container {
+                height: 50vh;
+            }
+        }
+
+        /* 动画效果 */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .error-toast {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            background: #ffebee;
+            color: var(--error-color);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(120%); }
+            to { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>三维点云智能配准系统</h1>
+    </div>
+
+    <div id="controls">
+        <div class="upload-group">
+            <div class="custom-upload">
+                <input type="file" id="sourceFile" accept=".ply,.pcd">
+                <label for="sourceFile">选择待配准点云</label>
+                <span class="file-name" id="sourceFileName">未选择文件</span>
+            </div>
+            <div class="custom-upload">
+                <input type="file" id="targetFile" accept=".ply,.pcd">
+                <label for="targetFile">选择目标点云</label>
+                <span class="file-name" id="targetFileName">未选择文件</span>
+            </div>
+        </div>
+        <button class="custom-button" onclick="processFiles()" id="processBtn">开始配准</button>
+    </div>
+
+    <div id="container"></div>
+
+    <div class="info-panel">
+        <div class="info-card">
+            <h3 style="text-align: center; margin-bottom: 20px;">📊 配准结果</h3>
+            <div class="matrix-container" id="matrixDisplay"></div>
+            <div class="metric-group">
+                <div class="metric-item">
+                    <div class="metric-label">配准时间</div>
+                    <div class="metric-value" id="timeValue">-</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">匹配度</div>
+                    <div class="metric-value" id="fitnessValue">-</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">配准误差</div>
+                    <div class="metric-value" id="rmseValue">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// 全局配置
+const SCALE_FACTOR = 100;
+let scene, camera, renderer, controls;
+
+// 场景初始化
+function initScene() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(document.getElementById('container').offsetWidth,
+                    document.getElementById('container').offsetHeight);
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    camera.position.set(3 * SCALE_FACTOR, 3 * SCALE_FACTOR, 3 * SCALE_FACTOR);
+    controls.update();
+}
+
+// 文件处理
+async function processFiles() {
+    const btn = document.getElementById('processBtn');
+    try {
+        btn.disabled = true;
+        const [source, target] = [
+            document.getElementById('sourceFile').files[0],
+            document.getElementById('targetFile').files[0]
+        ];
+        if (!source || !target) throw new Error('请选择两个点云文件');
+
+        const formData = new FormData();
+        formData.append('source', source);
+        formData.append('target', target);
+
+        const response = await fetch('/process', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (result.error) throw new Error(result.error);
+
+        // 清除旧场景
+        while(scene.children.length > 0) scene.remove(scene.children[0]);
+
+        // 创建新点云
+        const createCloud = (points, color) => {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(
+                new Float32Array(points.map(v => v * SCALE_FACTOR)), 3));
+            return new THREE.Points(geometry,
+                new THREE.PointsMaterial({ size: 0.8, color, transparent: true, opacity: 0.7 }));
+        };
+
+        scene.add(createCloud(result.source_points, 0xFF6666));
+        scene.add(createCloud(result.target_points, 0x66CC66));
+
+        // 更新显示
+        updateInfoPanel(result);
+        autoView();
+    } catch (e) {
+        showError(e.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// 更新信息面板
+function updateInfoPanel(result) {
+    // 矩阵格式化显示
+    const formatMatrix = matrix => matrix.map(row =>
+        `[${row.map(v => v.toFixed(4).padStart(10)).join(', ')}]`
+    ).join('\n');
+
+    document.getElementById('matrixDisplay').textContent = formatMatrix(result.matrix);
+    document.getElementById('timeValue').textContent = result.time;
+    document.getElementById('fitnessValue').textContent = result.accuracy.fitness;
+    document.getElementById('rmseValue').textContent = result.accuracy.rmse;
+
+    // 添加动画
+    document.querySelectorAll('.metric-value').forEach(el => {
+        el.style.animation = 'fadeIn 0.6s ease';
+        setTimeout(() => el.style.animation = '', 600);
+    });
+}
+
+// 自动视角调整
+function autoView() {
+    const box = new THREE.Box3().expandByObject(scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3()).length();
+
+    camera.position.set(center.x, center.y, center.z + size * 1.5);
+    controls.target.copy(center);
+    controls.update();
+}
+
+// 渲染循环
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+// 初始化
+initScene();
+animate();
+window.addEventListener('resize', () => {
+    camera.aspect = document.getElementById('container').offsetWidth /
+                    document.getElementById('container').offsetHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(document.getElementById('container').offsetWidth,
+                    document.getElementById('container').offsetHeight);
+});
+
+// 错误提示
+function showError(message) {
+    const toast = document.createElement('div');
+    toast.className = 'error-toast';
+    toast.innerHTML = `
+        <div>⚠️ ${message}</div>
+        <button onclick="this.parentElement.remove()"
+                style="background:none; border:none; color:inherit; cursor:pointer; margin-left:15px;">
+            ×
+        </button>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+
+// 文件选择反馈
+document.querySelectorAll('input[type="file"]').forEach(input => {
+    input.addEventListener('change', (e) => {
+        const fileName = e.target.files[0]?.name || '未选择文件';
+        const displaySpan = document.getElementById(`${e.target.id}Name`);
+        displaySpan.innerHTML = fileName === '未选择文件' ?
+            fileName :
+            `${fileName} <span style="color:var(--primary-color); margin-left:6px;">✓</span>`;
+    });
+});
+</script>
+</body>
+</html>
